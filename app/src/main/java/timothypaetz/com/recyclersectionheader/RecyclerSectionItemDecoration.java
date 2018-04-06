@@ -4,6 +4,7 @@ import android.graphics.Canvas;
 import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.support.v7.widget.RecyclerView;
+import android.util.Log;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -15,11 +16,13 @@ import android.widget.TextView;
 
 public class RecyclerSectionItemDecoration extends RecyclerView.ItemDecoration {
 
-    private final int             headerOffset;
-    private final boolean         sticky;
+    private static final String TAG = "RecyclerSectionItemDeco";
+
+    private final int headerOffset;
+    private final boolean sticky;
     private final SectionCallback sectionCallback;
 
-    private View     headerView;
+    private View headerView;
     private TextView header;
 
     public RecyclerSectionItemDecoration(int headerHeight, boolean sticky, @NonNull SectionCallback sectionCallback) {
@@ -30,10 +33,7 @@ public class RecyclerSectionItemDecoration extends RecyclerView.ItemDecoration {
 
     @Override
     public void getItemOffsets(Rect outRect, View view, RecyclerView parent, RecyclerView.State state) {
-        super.getItemOffsets(outRect,
-                             view,
-                             parent,
-                             state);
+        super.getItemOffsets(outRect, view, parent, state);
 
         int pos = parent.getChildAdapterPosition(view);
         if (sectionCallback.isSection(pos)) {
@@ -43,15 +43,12 @@ public class RecyclerSectionItemDecoration extends RecyclerView.ItemDecoration {
 
     @Override
     public void onDrawOver(Canvas c, RecyclerView parent, RecyclerView.State state) {
-        super.onDrawOver(c,
-                         parent,
-                         state);
+        super.onDrawOver(c, parent, state);
 
         if (headerView == null) {
             headerView = inflateHeaderView(parent);
             header = (TextView) headerView.findViewById(R.id.list_item_section_text);
-            fixLayoutSize(headerView,
-                          parent);
+            fixLayoutSize(headerView, parent);
         }
 
         CharSequence previousHeader = "";
@@ -59,12 +56,21 @@ public class RecyclerSectionItemDecoration extends RecyclerView.ItemDecoration {
             View child = parent.getChildAt(i);
             final int position = parent.getChildAdapterPosition(child);
 
+            //This makes the top header get "pushed" by the one below it
+            if(sticky) {
+                int contactPoint = headerView.getBottom();
+                if(sectionCallback.isSection(parent.getChildAdapterPosition(child))) {
+                    if(child.getTop() <= (contactPoint*2) && child.getTop() > contactPoint) {
+                        Log.d(TAG, "onDrawOver: headers are touching");
+                        moveHeader(c, child, headerView);
+                    }
+                }
+            }
+
             CharSequence title = sectionCallback.getSectionHeader(position);
             header.setText(title);
             if (!previousHeader.equals(title) || sectionCallback.isSection(position)) {
-                drawHeader(c,
-                           child,
-                           headerView);
+                drawHeader(c, child, headerView);
                 previousHeader = title;
             }
         }
@@ -73,22 +79,23 @@ public class RecyclerSectionItemDecoration extends RecyclerView.ItemDecoration {
     private void drawHeader(Canvas c, View child, View headerView) {
         c.save();
         if (sticky) {
-            c.translate(0,
-                        Math.max(0,
-                                 child.getTop() - headerView.getHeight()));
+            c.translate(0, Math.max(0, child.getTop() - headerView.getHeight()));
         } else {
-            c.translate(0,
-                        child.getTop() - headerView.getHeight());
+            c.translate(0, child.getTop() - headerView.getHeight());
         }
         headerView.draw(c);
         c.restore();
     }
 
+    private void moveHeader(Canvas c, View nextHeader, View headerView) {
+        c.save();
+        c.translate(0, nextHeader.getTop() - headerView.getHeight()*2); //Pushes the top header out
+        headerView.draw(c);
+        c.restore();
+    }
+
     private View inflateHeaderView(RecyclerView parent) {
-        return LayoutInflater.from(parent.getContext())
-                             .inflate(R.layout.recycler_section_header,
-                                      parent,
-                                      false);
+        return LayoutInflater.from(parent.getContext()).inflate(R.layout.recycler_section_header, parent,false);
     }
 
     /**
@@ -108,13 +115,9 @@ public class RecyclerSectionItemDecoration extends RecyclerView.ItemDecoration {
                                                         parent.getPaddingTop() + parent.getPaddingBottom(),
                                                         view.getLayoutParams().height);
 
-        view.measure(childWidth,
-                     childHeight);
+        view.measure(childWidth, childHeight);
 
-        view.layout(0,
-                    0,
-                    view.getMeasuredWidth(),
-                    view.getMeasuredHeight());
+        view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
     }
 
     public interface SectionCallback {
